@@ -133,38 +133,8 @@ d1_ b_**a_+c_**a_:>(termFunc[d1 b+c])**a,
 };
 
 ToPythonString[expr_]:=Switch[expr,
-\!\(\*
-TagBox[
-StyleBox[
-RowBox[{"Times", "[", 
-RowBox[{"a_", ",", 
-RowBox[{"Power", "[", 
-RowBox[{"b_", ",", 
-RowBox[{"-", "1"}]}], "]"}]}], "]"}],
-ShowSpecialCharacters->False,
-ShowStringCharacters->True,
-NumberMarks->True],
-FullForm]\),expr/.{\!\(\*
-TagBox[
-StyleBox[
-RowBox[{"Times", "[", 
-RowBox[{"a_", ",", 
-RowBox[{"Power", "[", 
-RowBox[{"b_", ",", 
-RowBox[{"-", "1"}]}], "]"}]}], "]"}],
-ShowSpecialCharacters->False,
-ShowStringCharacters->True,
-NumberMarks->True],
-FullForm]\):>"("<>ToPythonString[a]<>"/"<>ToPythonString[b]<>")"},
-Times[a_,b_],expr/.{\!\(\*
-TagBox[
-StyleBox[
-RowBox[{"Times", "[", 
-RowBox[{"a_", ",", "b_"}], "]"}],
-ShowSpecialCharacters->False,
-ShowStringCharacters->True,
-NumberMarks->True],
-FullForm]\):>"("<>ToPythonString[a]<>"*"<>ToPythonString[b]<>")"},
+Times[a_,Power[b_,-1]],expr/.{Times[a_,Power[b_,-1]]:>"("<>ToPythonString[a]<>"/"<>ToPythonString[b]<>")"},
+Times[a_,b_],expr/.{Times[a_,b_]:>"("<>ToPythonString[a]<>"*"<>ToPythonString[b]<>")"},
 Plus[a_,Times[-1,b_]],expr/.{Plus[a_,Times[-1,b_]]:>"("<>ToPythonString[a]<>"-"<>ToPythonString[b]<>")"},
 Plus[a_,b_],expr/.{Plus[a_,b_]:>"("<>ToPythonString[a]<>"+"<>ToPythonString[b]<>")"},
 Power[a_,b_],expr/.{Power[a_,b_]:>ToPythonString[a]<>"**"<>ToPythonString[b]},
@@ -177,4 +147,21 @@ derex=Evaluate[
 expr//.{Derivative[da___,d_,db___][s_][aa___,a_,ab___]/;(Length[{da}]==Length[{aa}] &&Length[{db}]==Length[{ab}]&&d>1):>Derivative[da,0,db][Symbol["d"<>ToString[d]<>ToString[s]<>"d"<>ToString[a]<>ToString[d]]][aa,a,ab]}//.{Derivative[da___,d_,db___][s_][aa___,a_,ab___]/;(Length[{da}]==Length[{aa}] &&Length[{db}]==Length[{ab}]&&d==1):>Derivative[da,0,db][Symbol["d"<>ToString[s]<>"d"<>ToString[a]]][aa,a,ab]}
 ];
 ToPythonString[derex]
+];
+
+ToMatlabString[expr_]:=Switch[expr,
+Times[a_,Power[b_,-1]],expr/.{Times[a_,Power[b_,-1]]:>"("<>ToMatlabString[a]<>"./"<>ToMatlabString[b]<>")"},
+Times[a_,b_],expr/.{Times[a_,b_]:>"("<>ToMatlabString[a]<>".*"<>ToMatlabString[b]<>")"},
+Plus[a_,Times[-1,b_]],expr/.{Plus[a_,Times[-1,b_]]:>"("<>ToMatlabString[a]<>"-"<>ToMatlabString[b]<>")"},
+Plus[a_,b_],expr/.{Plus[a_,b_]:>"("<>ToMatlabString[a]<>"+"<>ToMatlabString[b]<>")"},
+Power[a_,b_],expr/.{Power[a_,b_]:>ToMatlabString[a]<>".^"<>ToMatlabString[b]},
+s_[a__],expr/.{s_[a__]:>ToString[s]},
+_,ToString[expr]
+];
+
+ToMatlab[expr_]:=Module[{derex},
+derex=Evaluate[
+expr//.{Derivative[da___,d_,db___][s_][aa___,a_,ab___]/;(Length[{da}]==Length[{aa}] &&Length[{db}]==Length[{ab}]&&d>1):>Derivative[da,0,db][Symbol["d"<>ToString[d]<>ToString[s]<>"d"<>ToString[a]<>ToString[d]]][aa,a,ab]}//.{Derivative[da___,d_,db___][s_][aa___,a_,ab___]/;(Length[{da}]==Length[{aa}] &&Length[{db}]==Length[{ab}]&&d==1):>Derivative[da,0,db][Symbol["d"<>ToString[s]<>"d"<>ToString[a]]][aa,a,ab]}
+];
+ToMatlabString[derex]
 ];
