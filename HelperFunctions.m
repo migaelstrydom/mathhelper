@@ -43,7 +43,7 @@ neweq=neweq+(Apply[Times,termList]/.{unsym->1});
 ];
 neweq-unsym2
 ];
-OrthogTerm[term_,sumvar_]:=Module[{t},
+(*OrthogTerm[term_,sumvar_]:=Module[{t},
 t=Simplify[Evaluate[term]]/.b_ Exp[a_]->{a,b};
 Simplify[term/.Solve[t[[1]]==0,sumvar][[1]]]
 ];
@@ -52,6 +52,18 @@ eq=Expand[equation];
 If[MatchQ[eq,a_+b_],
 Apply[Plus,OrthogTerm[#,sumvar]&/@Table[eq[[nnuniquenn]],{nnuniquenn,Length[eq]}]],
 OrthogTerm[eq,sumvar]
+]
+];*)
+(* Still need to test this version thoroughly. *)
+OrthogTerm[term_,var_,sumvar_]:=Module[{t},
+t=Simplify[Evaluate[term]]/.b_ Exp[a_]->{a,b};
+Simplify[term/.Solve[FindTermsWith[t[[1]],var]==0,sumvar][[1]]]
+];
+OrthogIntegrate[equation_,var_,sumvar_]:=Module[{eq},
+eq=Expand[equation];
+If[MatchQ[eq,a_+b_],
+Apply[Plus,OrthogTerm[#,var,sumvar]&/@Table[eq[[\[FormalN]]],{\[FormalN],Length[eq]}]],
+OrthogTerm[eq,var,sumvar]
 ]
 ];
 
