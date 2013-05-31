@@ -103,6 +103,26 @@ If[MatchQ[expr,a_+b_],
 
 repSolutionFunction={HoldPattern[a_[pa__]->b_]->a->Function[{pa},b]};
 
+(* Takes a term of the form (a x^3+b x^2+c x+d)Exp[e x^2+f x+g], finds the coefficients a-g, and integrates, assuming e < 0 *)
+IntegrateExponentTerm[term_]:=Module[{coeffs,a,b,c,d,e,f,g,CcUniqueNameHopefully,eeUniqueNameHopefully},
+coeffs=term/.{CcUniqueNameHopefully_  Exp[eeUniqueNameHopefully_]->{CcUniqueNameHopefully,eeUniqueNameHopefully}};
+If[coeffs==term,
+Print["Matching error in IntegrateExponentTerm."];
+Return[];
+];
+{d,c,b,a}=PadRight[CoefficientList[coeffs[[1]],x],4];
+{g,f,e}=PadRight[CoefficientList[coeffs[[2]],x],3];
+(E^(-(f^2/(4 e))+g) (-8 d e^3-6 a e f+4 c e^2 f+a f^3-2 b e (-2 e+f^2)) Sqrt[\[Pi]])/(8 (-e)^(7/2))
+];
+
+IntegrateExponentEquation[equation_]:=Module[{eq,nn,a,b},
+eq=Expand[equation];
+If[MatchQ[eq,a_+b_],
+Apply[Plus,IntegrateExponentTerm[#]&/@(Table[eq[[\[FormalN]]],{\[FormalN],Length[eq]}])],
+IntegrateExponentTerm[eq]
+]
+];
+
 FreeListQ[expr_,lst_]:=(
 And@@(FreeQ[expr,#]&/@lst)
 );
