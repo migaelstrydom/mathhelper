@@ -81,6 +81,7 @@ CountFields[term_,fields_]:=Module[{aoeu,a,n},
 Length[Flatten[ReleaseHold[(#/.{a_^n_->Hold[Table[a,{aoeu,n}]]})]&/@(term[[#]]&/@Union[Flatten[(#[[1]]&/@Position[term,#]&/@fields)]])]]
 ];
 
+(* Separates a term into factors that depend on dep and those that do not.*)
 FactorOutTerm[term_,dep_]:=Module[{},
 {Times@@(term[[#[[1]]]]&/@Position[term,dep]),
 Times@@((term[[#]]&)/@Complement[Range[Length[term]],(#[[1]]&/@Position[term,dep])])}
@@ -101,6 +102,54 @@ If[MatchQ[expr,a_+b_],
 ]
 );
 
+Linspace[a_,b_,num_]:=Module[{},
+Range[a,b,(b-a)/(num-1)]
+];
+
+(*
+    Takes an equation an extracts the name of the field with the highest derivative. If there are no such fields, it 
+    returns {}. If there are many such fields, it takes the last one according to Mathematica's internal sort.
+*)
+HighestDerivativeField[eq_]:=(
+  If[Position[eq,Derivative[__][__][__]]=!={},
+    Last[Sort[Extract[eq,Position[eq,Derivative[__][__][__]]]]]/.Derivative[__][a_][__]->a,
+    {}
+  ]
+);
+
+(* 
+   Takes an equation and a field name. Renormalizes the equation so that the highest derivative term in the field has 
+   unit coefficient. Works well with HighestDerivativeField.
+*)
+NormalizeEquation[eq_,field_]:=Module[{fieldWithDeriv},
+  fieldWithDeriv=Last[Flatten[Extract[eq,#]&/@(Position[eq,#]&/@TandD[field])]];
+  Collect[eq /Coefficient[eq,fieldWithDeriv],TandD[field],Simplify]
+];
+
+(* Same as above, but with a default value for field. *)
+NormalizeEquation[eq_]:=(
+  NormalizeEquation[eq,HighestDerivativeField[eq]]
+);
+
+(*  
+ChangeVariables[f[x]f''[x],x,y,1/y,{f}]
+gives
+f[y] (2 y^3 (f^\[Prime])[y]+y^4 (f^\[Prime]\[Prime])[y])
+
+validFunctions is a list of functions for which the argument is directly changed from old to new, not to oldequals.
+*)
+ChangeVariables[eq_,old_,new_,oldequals_,validFunctions_]:=Block[{UnSym,newequals},
+  UnSym=Unique[];
+  newequals=Solve[old==oldequals,new][[1,1,2]];
+  eq/.{Func_[a___,old,b___]:>Func[a,UnSym,b]/;(MemberQ[validFunctions,Func]),
+    Derivative[dp__][Func_][a___,old,b___]:>(D[Func[a,newequals,b],##]&@@Thread[({#1,#2}&)[{a,old,b},{dp}]])
+  }/.old->oldequals/.UnSym->new
+]
+
+(* Give this function a series (with head SeriesData) and it will return the leading coefficient. *)
+LeadingCoefficient[s_]:=If[Head[s]===SeriesData,Level[s,1][[3,1]],s];
+
+(* Give this function the output of Solve. *)
 repSolutionFunction={HoldPattern[a_[pa__]->b_]->a->Function[{pa},b]};
 
 (* Takes a term of the form (a x^3+b x^2+c x+d)Exp[e x^2+f x+g], finds the coefficients a-g, and integrates, assuming e < 0 *)
@@ -121,6 +170,19 @@ If[MatchQ[eq,a_+b_],
 Apply[Plus,IntegrateExponentTerm[#]&/@(Table[eq[[\[FormalN]]],{\[FormalN],Length[eq]}])],
 IntegrateExponentTerm[eq]
 ]
+];
+
+(* 
+  Works like series, except expands in (x0-x) instead of (x-x0). This gets rid of the annoying i\pi in the following:
+  Series[u ^2Log[1-u^2],{u,1,0}]
+  SeriesFromBelow[u ^2Log[1-u^2],{u,1,0}]
+  Series[(u-1)^m u ^2Log[1-u^2],{u,1,0}]
+  SeriesFromBelow[(u-1)^m u ^2Log[1-u^2],{u,1,0}]
+*)
+SeriesFromBelow[f_,{x_,x0_,n_}]:=Module[{y,tmp},
+  Series[f/.x->x0-y,{y,0,n}]
+    /.{HoldPattern[a_ SeriesData[y,0,L_,orders__]]:>(a/.y->x0-x)SeriesData[x,x0,L/.y->x0-x,orders]}
+    /.{HoldPattern[SeriesData[y,0,L_,orders__]]:>SeriesData[x,x0,L/.y->x0-x,orders]}
 ];
 
 FreeListQ[expr_,lst_]:=(
@@ -164,6 +226,8 @@ d1_ b_**a_+c_**a_:>(termFunc[d1 b+c])**a,
  b_**a_+c_**a_:>(termFunc[b+c])**a
 };
 
+GetRepPauliIdentities[\[Sigma]s_]:={\[Sigma]s[i_]**\[Sigma]s[j_]:>KroneckerDelta[i,j]+I Sum[Signature[{i,j,k}]\[Sigma]s[k],{k,3}]};
+
 ToPythonString[expr_]:=Switch[expr,
 Times[a_,Power[b_,-1]],expr/.{Times[a_,Power[b_,-1]]:>"("<>ToPythonString[a]<>"/"<>ToPythonString[b]<>")"},
 Times[a_,b_],expr/.{Times[a_,b_]:>"("<>ToPythonString[a]<>"*"<>ToPythonString[b]<>")"},
@@ -187,6 +251,7 @@ Times[a_,b_],expr/.{Times[a_,b_]:>"("<>ToMatlabString[a]<>".*"<>ToMatlabString[b
 Plus[a_,Times[-1,b_]],expr/.{Plus[a_,Times[-1,b_]]:>"("<>ToMatlabString[a]<>"-"<>ToMatlabString[b]<>")"},
 Plus[a_,b_],expr/.{Plus[a_,b_]:>"("<>ToMatlabString[a]<>"+"<>ToMatlabString[b]<>")"},
 Power[a_,b_],expr/.{Power[a_,b_]:>ToMatlabString[a]<>".^"<>ToMatlabString[b]},
+Rational[a_?NumberQ,b_?NumberQ],expr/.{Rational[a_,b_]:>"("<>ToMatlabString[a]<>"/"<>ToMatlabString[b]<>")"},
 s_[a__],expr/.{s_[a__]:>ToString[s]},
 _,ToString[expr]
 ];
