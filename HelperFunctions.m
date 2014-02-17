@@ -67,6 +67,9 @@ OrthogTerm[eq,var,sumvar]
 ]
 ];
 
+(* Finds patt in expr and returns its precise form in expr. Returns a list of all occurrences. *)
+FindPattern[expr_,patt_]:=Part[expr,##]&@@#&/@Position[expr,patt];
+
 FindTermsWith[equation_,field_]:=Module[{eq},
 eq=Expand[equation];
 Collect[
@@ -110,12 +113,12 @@ Range[a,b,(b-a)/(num-1)]
     Takes an equation an extracts the name of the field with the highest derivative. If there are no such fields, it 
     returns {}. If there are many such fields, it takes the last one according to Mathematica's internal sort.
 *)
-HighestDerivativeField[eq_]:=(
+HighestDerivativeField[eq_]:=Block[{a},
   If[Position[eq,Derivative[__][__][__]]=!={},
     Last[Sort[Extract[eq,Position[eq,Derivative[__][__][__]]]]]/.Derivative[__][a_][__]->a,
     {}
   ]
-);
+];
 
 (* 
    Takes an equation and a field name. Renormalizes the equation so that the highest derivative term in the field has 
@@ -127,9 +130,12 @@ NormalizeEquation[eq_,field_]:=Module[{fieldWithDeriv},
 ];
 
 (* Same as above, but with a default value for field. *)
-NormalizeEquation[eq_]:=(
-  NormalizeEquation[eq,HighestDerivativeField[eq]]
-);
+NormalizeEquation[eq_]:=Module[{HDF},
+  HDF=HighestDerivativeField[eq];
+  If[HDF=!={},
+  NormalizeEquation[eq,HDF],
+  eq]
+];
 
 (*  
 ChangeVariables[f[x]f''[x],x,y,1/y,{f}]
@@ -150,7 +156,7 @@ ChangeVariables[eq_,old_,new_,oldequals_,validFunctions_]:=Block[{UnSym,newequal
 LeadingCoefficient[s_]:=If[Head[s]===SeriesData,Level[s,1][[3,1]],s];
 
 (* Give this function the output of Solve. *)
-repSolutionFunction={HoldPattern[a_[pa__]->b_]->a->Function[{pa},b]};
+repSolutionFunction={HoldPattern[\[FormalA]_[pa__]->\[FormalB]_]->\[FormalA]->Function[{pa},\[FormalB]]};
 
 (* Takes a term of the form (a x^3+b x^2+c x+d)Exp[e x^2+f x+g], finds the coefficients a-g, and integrates, assuming e < 0 *)
 IntegrateExponentTerm[term_]:=Module[{coeffs,a,b,c,d,e,f,g,CcUniqueNameHopefully,eeUniqueNameHopefully},
