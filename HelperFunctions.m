@@ -56,7 +56,7 @@ OrthogTerm[eq,sumvar]
 ];*)
 (* Still need to test this version thoroughly. *)
 OrthogTerm[term_,var_,sumvar_]:=Module[{t},
-t=Simplify[Evaluate[term]]/.b_ Exp[a_]->{a,b};
+t=Simplify[Evaluate[term]]/.\[FormalB]_ Exp[\[FormalA]_]->{\[FormalA],\[FormalB]};
 Simplify[term/.Solve[FindTermsWith[t[[1]],var]==0,sumvar][[1]]]
 ];
 OrthogIntegrate[equation_,var_,sumvar_]:=Module[{eq},
@@ -89,6 +89,7 @@ FactorOutTerm[term_,dep_]:=Module[{},
 {Times@@(term[[#[[1]]]]&/@Position[term,dep]),
 Times@@((term[[#]]&)/@Complement[Range[Length[term]],(#[[1]]&/@Position[term,dep])])}
 ];
+
 FactorOut[expression_,dep_]:=Module[{e},
 e=Expand[expression];
 If[MatchQ[e,a_+b_],
@@ -108,6 +109,13 @@ If[MatchQ[expr,a_+b_],
 Linspace[a_,b_,num_]:=Module[{},
 Range[a,b,(b-a)/(num-1)]
 ];
+
+(*
+	Counts the number of derivatives with respect to a specific variable.
+*)
+CountDerivatives[Derivative[derivatives__][_][parameters__],variable_]:=(
+	List[derivatives][[Position[List[parameters],variable][[1,1]]]]
+);
 
 (*
     Takes an equation an extracts the name of the field with the highest derivative. If there are no such fields, it 
@@ -152,8 +160,12 @@ ChangeVariables[eq_,old_,new_,oldequals_,validFunctions_]:=Block[{UnSym,newequal
   }/.old->oldequals/.UnSym->new
 ]
 
-(* Give this function a series (with head SeriesData) and it will return the leading coefficient. *)
-LeadingCoefficient[s_]:=If[Head[s]===SeriesData,Level[s,1][[3,1]],s];
+(* Give this function a series (with head SeriesData) and it will return the leading coefficient. If the SeriesData is empty
+  (which means it is zero up to higher order corrections), it returns 0.
+ *)
+LeadingCoefficient[s_]:=If[Head[s]===SeriesData,
+If[Level[s,1][[3]]==={},0,Level[s,1][[3,1]]],
+s];
 
 (* Give this function the output of Solve. *)
 repSolutionFunction={HoldPattern[\[FormalA]_[pa__]->\[FormalB]_]->\[FormalA]->Function[{pa},\[FormalB]]};
