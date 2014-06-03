@@ -70,11 +70,17 @@ OrthogTerm[eq,var,sumvar]
 (* Finds patt in expr and returns its precise form in expr. Returns a list of all occurrences. *)
 FindPattern[expr_,patt_]:=Part[expr,##]&@@#&/@Position[expr,patt];
 
-FindTermsWith[equation_,field_]:=Module[{eq},
-eq=Expand[equation];
-Collect[
-Apply[Plus,eq[[#]]&/@Union[(Position[eq,field][[#,1]]&/@Range[Length[Position[eq,field]]])]],
-TandD[field],Simplify]
+FindTermsWith[equation_, field_]:=Module[{eq},
+	eq=Expand[equation];
+	If[MatchQ[eq,a_+b_],
+		Collect[
+			Apply[Plus,eq[[#]]&/@Union[(Position[eq,field][[#,1]]&/@Range[Length[Position[eq,field]]])]],
+			TandD[field],
+			Simplify
+		]
+	,
+		If[Position[eq,field]=={}, 0, eq]
+	]
 ];
 (* For collect statements: return a list containing patterns matching the function and its derivatives. *)
 TandD[func_]:={func[__],Derivative[__][func][__]};
@@ -106,9 +112,7 @@ If[MatchQ[expr,a_+b_],
 ]
 );
 
-Linspace[a_,b_,num_]:=Module[{},
-Range[a,b,(b-a)/(num-1)]
-];
+Linspace[a_, b_, num_Integer] := Array[# &, num, {a, b}];
 
 (*
 	Counts the number of derivatives with respect to a specific variable.

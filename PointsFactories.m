@@ -16,17 +16,22 @@ Copyright 2013 Migael Strydom
    limitations under the License.
 *)
 
+Clear[CollocationPointsFactory, EvenlySpacedPointsFactory, PointsPatchesFactory, CollocationPoints2DFactory, EvenlySpacedPoints2DFactory];
+
 ChebyshevGrid[xSmall_, xLarge_, n_Integer/;n>1] := 
 	xSmall+1/2 (xLarge-xSmall) (1-Cos[\[Pi] Range[0,n-1]/(n-1)]);
 
-CollocationPointsFactory[collPoints_, start_, end_, numberOfPoints_, label_] := (
+Options[CollocationPointsFactory] = {Precision -> MachinePrecision};
+CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
 
 	Clear[collPoints];
 
 	collPoints[number] = numberOfPoints;
-	collPoints[label] = N[ChebyshevGrid[start, end, collPoints[number]]];
-	collPoints[zeroes] = ConstantArray[0., collPoints[number]];
-	collPoints[ones] = ConstantArray[1., collPoints[number]];
+	collPoints[label] = ChebyshevGrid[SetPrecision[start, OptionValue[Precision]], 
+									 SetPrecision[end, OptionValue[Precision]],
+									 collPoints[number]];
+	collPoints[zeroes] = SetPrecision[ConstantArray[0, collPoints[number]],OptionValue[Precision]];
+	collPoints[ones] = SetPrecision[ConstantArray[1, collPoints[number]],OptionValue[Precision]];
 
 	collPoints[interpolation][ps_?ListQ] :=
 		Interpolation[Thread[({#1,#2}&)[collPoints[label],ps]],InterpolationOrder->collPoints[number]-1];
@@ -36,7 +41,7 @@ CollocationPointsFactory[collPoints_, start_, end_, numberOfPoints_, label_] := 
 			PeriodicInterpolation->False,"DifferenceOrder"->"Pseudospectral"];
 	collPoints[diff][y_?ListQ] := collPoints[diff][y,1];
 
-	collPoints[diffmatrix][n_Integer/;n>0] :=
+	collPoints[diffMatrix][n_Integer/;n>0] :=
 		NDSolve`FiniteDifferenceDerivative[{n},{collPoints[label]},
 			"DifferenceOrder"->"Pseudospectral",PeriodicInterpolation->{False}]@"DifferentiationMatrix";
 
@@ -53,7 +58,13 @@ CollocationPointsFactory[collPoints_, start_, end_, numberOfPoints_, label_] := 
 				ListPlot[Thread[({#1,#2}&)[collPoints[label],y]],PlotStyle->PointSize[0.02]]},
 			plotOptions
 		];
-	collPoints[evaluate][field_,x_List] :=
+
+	collPoints[evaluate][ps_List,x_List] :=
+		With[{cp=collPoints[label],numPoints=collPoints[number]},
+			Interpolation[{cp[[#]],ps[[#]]}&/@Range[numPoints],InterpolationOrder->numPoints-1]/@x
+		];
+
+	collPoints[evaluate][field_Symbol,x_List] :=
 		With[{cp=collPoints[label],numPoints=collPoints[number]},
 			Interpolation[{cp[[#]],collPoints[field][[#]]}&/@Range[numPoints],InterpolationOrder->numPoints-1]/@x
 		];
@@ -67,7 +78,7 @@ CollocationPointsFactory[collPoints_, start_, end_, numberOfPoints_, label_] := 
 
 	collPoints[substituteAnalytic][fieldList_List] := {
 		Derivative[dz__][field_][p__]/;MemberQ[fieldList, field]:>
-			collPoints[diffmatrix][CountDerivatives[Derivative[dz][field][p],label]].Table[field[\[FormalI]],{\[FormalI],collPoints[number]}],
+			collPoints[diffMatrix][CountDerivatives[Derivative[dz][field][p],label]].Table[field[\[FormalI]],{\[FormalI],collPoints[number]}],
 		field_[p__]/;MemberQ[fieldList,field]:>Table[field[\[FormalI]],{\[FormalI], collPoints[number]}],
 		label->collPoints[label]
 	};
@@ -84,12 +95,14 @@ CollocationPointsFactory[collPoints_, start_, end_, numberOfPoints_, label_] := 
 	*)
 );
 
-EvenlySpacedPointsFactory[esPoints_, start_, end_, numberOfPoints_, label_] := (
+Options[EvenlySpacedPointsFactory] = {Precision -> MachinePrecision};
+EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
 	Clear[esPoints];
 	esPoints[number] = numberOfPoints;
-	esPoints[label] = Linspace[start, end, esPoints[number]];
-	esPoints[zeroes] = ConstantArray[0.,esPoints[number]];
-	esPoints[ones] = ConstantArray[1.,esPoints[number]];
+	esPoints[label] = Linspace[SetPrecision[start, OptionValue[Precision]], 
+							  SetPrecision[end, OptionValue[Precision]], esPoints[number]];
+	esPoints[zeroes] = SetPrecision[ConstantArray[0,esPoints[number]], OptionValue[Precision]];
+	esPoints[ones] = SetPrecision[ConstantArray[1,esPoints[number]], OptionValue[Precision]];
 	esPoints[spacing] = esPoints[label][[2]]-esPoints[label][[1]];
 
 	esPoints[interpolation][ps_?ListQ] := Interpolation[Thread[({#1,#2}&)[esPoints[label],ps]]];
@@ -100,11 +113,15 @@ EvenlySpacedPointsFactory[esPoints_, start_, end_, numberOfPoints_, label_] := (
 	(*esPoints[diff][ps_?ListQ,n_Integer/;n>0]:=(Head[D[Interpolation[Thread[({#1,#2}&)[esPoints[label],ps]],InterpolationOrder\[Rule]esPoints[number]-1][z],z]]/@esPoints[label]);*)
 	esPoints[diff][ps_?ListQ,n_Integer/;n>0]:=NDSolve`FiniteDifferenceDerivative[n,esPoints[label],ps,PeriodicInterpolation->False,"DifferenceOrder"->8,PeriodicInterpolation->{False}];
 	esPoints[diff][field_?(MemberQ[tfields,#]&),n_Integer/;n>0]:=esPoints[diff][esPoints[field],n];
-	esPoints[diff][ps_]:=esPoints[diff][ps,1]
-	esPoints[diffmatrix][n_Integer/;n>0]:=
+	esPoints[diff][ps_]:=esPoints[diff][ps,1];
+	esPoints[diffMatrix][n_Integer/;n>0]:=
 		NDSolve`FiniteDifferenceDerivative[{n},{esPoints[label]},"DifferenceOrder"->8,PeriodicInterpolation->{False}]@"DifferentiationMatrix";
 
 	esPoints[integrate][ps_?ListQ]:=(Head[Integrate[Interpolation[Thread[({#1,#2}&)[esPoints[label],ps]]][z],z]]/@esPoints[label]);
+
+	esPoints[evaluate][ps_List,x_List] := Map[esPoints[interpolation][ps],x];
+
+	esPoints[evaluate][field_Symbol,x_List] :=Map[esPoints[interpolation][esPoints[field]],x];
 
 	esPoints[substitute][fieldList_] = {
 		Derivative[dz__][field_][p__]/;MemberQ[fieldList,field]:>esPoints[diff][esPoints[field],CountDerivatives[Derivative[dz][field][p],label]],
@@ -113,13 +130,101 @@ EvenlySpacedPointsFactory[esPoints_, start_, end_, numberOfPoints_, label_] := (
 	};
 
 	esPoints[substituteAnalytic][fieldList_List] := {
-		Derivative[dz__][field_][p__]/;MemberQ[fieldList,field]:>esPoints[diffmatrix][CountDerivatives[Derivative[dz][field][p],label]].Table[field[\[FormalI]],{\[FormalI],esPoints[number]}],
+		Derivative[dz__][field_][p__]/;MemberQ[fieldList,field]:>esPoints[diffMatrix][CountDerivatives[Derivative[dz][field][p],label]].Table[field[\[FormalI]],{\[FormalI],esPoints[number]}],
 		field_[p__]/;MemberQ[fieldList,field]:>Table[field[\[FormalI]],{\[FormalI],esPoints[number]}],
 		label->esPoints[label]
 	};
 
 	esPoints[fieldTable][field_]:=Table[field[\[FormalI]],{\[FormalI],esPoints[number]}];
 );
+
+(* Domains must match up: pointsA[label][[-1]] \[Equal] pointsB[label][[1]] *)
+Options[PointsPatchesFactory] = {Precision -> MachinePrecision};
+PointsPatchesFactory[points_Symbol, pointsA_Symbol, pointsB_Symbol, label_Symbol, OptionsPattern[]] := (
+	Clear[points];
+
+	If[pointsA[label][[-1]] != pointsB[label][[1]], Print["Domains don't match!"]; Abort[]];
+
+	points[label] = Join[pointsA[label][[;;-2]],pointsB[label]];
+	points[number]= Length[points[label]];
+	points[zeroes] = SetPrecision[ConstantArray[0, points[number]], OptionValue[Precision]];
+	points[ones] = SetPrecision[ConstantArray[1., points[number]], OptionValue[Precision]];
+
+	points[interpolation][ps_?ListQ] := Interpolation[Thread[({#1,#2}&)[points[label],ps]]];
+
+	points[diff][y_?ListQ,n_Integer/;n>0] := 
+		Join[
+			pointsA[diff][y[[;;pointsA[number]]],n][[;;-2]],
+			pointsB[diff][y[[pointsA[number];;]],n]
+		];
+	points[diff][y_?ListQ]:=points[diff][y,1];
+	points[diffMatrix][n_Integer/;n>0] := 
+		Join[
+			ArrayFlatten[{{pointsA[diffMatrix][n][[;;-2]], ConstantArray[0,{pointsA[number]-1,pointsB[number]-1}]}}],
+			ArrayFlatten[{{ConstantArray[0,{pointsB[number],pointsA[number]-1}], pointsB[diffMatrix][n]}}]
+	];
+(*		ArrayFlatten[{{pointsA[diffMatrix][n][[;;-2,;;-2]], 0}, 
+			{0, pointsB[diffMatrix][n]}}
+		];*)
+
+	points[integrate][y_?ListQ] := 
+		With[{integrationA = pointsA[integrate][y[[;;pointsA[number]]]]},
+			Join[
+				integrationA[[;;-2]],
+				integrationA[[-1]]+pointsB[integrate][y[[pointsA[number];;]]]
+			]
+		];
+
+	points[plot][y_?ListQ,plotOptions___] := 
+		Show[
+			{ListLinePlot[Thread[({#1,#2}&)[points[label],y]], plotOptions],
+				ListPlot[Thread[({#1,#2}&)[points[label],y]],PlotStyle->PointSize[0.02]]},
+			plotOptions
+		];
+
+	points[evaluate][ps_List,x_List] := (
+		Join[
+			pointsA[evaluate][ps[[;;pointsA[number]]],Select[x,#<pointsB[label][[1]]&]],
+			pointsB[evaluate][ps[[pointsA[number];;]],Select[x,#>pointsB[label][[1]]&]]
+		]
+	);
+
+	points[substituteAnalytic][fieldList_List] := {
+		Derivative[dz__][field_][p__]/;MemberQ[fieldList, field]:>
+			points[diffMatrix][CountDerivatives[Derivative[dz][field][p],label]].Table[field[\[FormalI]],{\[FormalI],points[number]}],
+		field_[p__]/;MemberQ[fieldList,field]:>Table[field[\[FormalI]],{\[FormalI], points[number]}],
+		label->points[label]
+	};
+);
+
+(* Testing:
+
+CollocationPointsFactory[pointsA, 0., 1., 30, z]
+EvenlySpacedPointsFactory[pointsB,1., 2., 100, z]
+PointsPatchesFactory[points,pointsA,pointsB,z] 
+
+(* Diff *)
+points[plot][Sin[5points[z]],PlotRange\[Rule]All]
+points[plot][points[diff][Sin[5points[z]]]]
+points[plot][points[diff][Sin[5points[z]]]-5Cos[5points[z]],PlotRange\[Rule]All]
+
+points[diffMatrix][1]//MatrixPlot
+
+f'[z]/.points[substituteAnalytic][{f}]/.f[i_]:>(points[z]^2)[[i]]
+points[plot][%]
+points[diffMatrix][1].(points[z]^2)
+points[plot][%]
+
+(* integration *)
+points[plot][Sin[10points[z]],PlotRange\[Rule]All]
+points[plot][points[integrate][Sin[10points[z]]]]
+points[plot][points[integrate][Sin[10points[z]]]+0.1Cos[10points[z]]-0.1,PlotRange\[Rule]All]
+
+points[interpolation][Sin[5points[z]]]
+Plot[%[z],{z,0,2}]
+
+points[evaluate][Sin[5points[z]],Linspace[0,2.,5000]]//ListPlot
+*)
 
 CollocationPoints2DFactory[collPoints2D_, zPoints_List, vPoints_List, zLabel_, vLabel_] := (
 
