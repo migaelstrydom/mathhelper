@@ -150,18 +150,22 @@ NormalizeEquation[eq_]:=Module[{HDF},
 ];
 
 (*  
-ChangeVariables[f[x]f''[x],x,y,1/y,{f}]
+ChangeVariables[f[x]f''[x],x,y,1/y,1/x,{f}]
 gives
 f[y] (2 y^3 (f^\[Prime])[y]+y^4 (f^\[Prime]\[Prime])[y])
 
 validFunctions is a list of functions for which the argument is directly changed from old to new, not to oldequals.
 *)
-ChangeVariables[eq_,old_,new_,oldequals_,validFunctions_]:=Block[{UnSym,newequals},
-  UnSym=Unique[];
-  newequals=Solve[old==oldequals,new][[1,1,2]];
-  eq/.{Func_[a___,old,b___]:>Func[a,UnSym,b]/;(MemberQ[validFunctions,Func]),
-    Derivative[dp__][Func_][a___,old,b___]:>(D[Func[a,newequals,b],##]&@@Thread[({#1,#2}&)[{a,old,b},{dp}]])
-  }/.old->oldequals/.UnSym->new
+ChangeVariables[eq_, old_Symbol, new_Symbol, 
+	oldEquals_, newEquals_, validFunctions_List] := Block[{UnSym},
+  UnSym = Unique[];
+  eq /. {
+	Func_[a___, old, b___] :> Func[a, UnSym, b] /; (MemberQ[validFunctions, Func]),
+    Derivative[dp__][Func_][a___, old, b___] :> 
+		Apply[D[Func[a, newEquals, b], ##] &, 
+			Thread[({#1, #2}&)[{a, old, b}, {dp}]]
+		]
+  } /. old->oldEquals /. UnSym->new
 ]
 
 (* Give this function a series (with head SeriesData) and it will return the leading coefficient. If the SeriesData is empty
