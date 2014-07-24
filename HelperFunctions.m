@@ -160,11 +160,11 @@ ChangeVariables[eq_, old_Symbol, new_Symbol,
 	oldEquals_, newEquals_, validFunctions_List] := Block[{UnSym},
   UnSym = Unique[];
   eq /. {
-	Func_[a___, old, b___] :> Func[a, UnSym, b] /; (MemberQ[validFunctions, Func]),
-    Derivative[dp__][Func_][a___, old, b___] :> 
+	Func_[a___, old, b___] /; (MemberQ[validFunctions, Func]) :> Func[a, UnSym, b] ,
+    Derivative[dp__][Func_][a___, old, b___] /; (MemberQ[validFunctions, Func]) :> 
 		Apply[D[Func[a, newEquals, b], ##] &, 
 			Thread[({#1, #2}&)[{a, old, b}, {dp}]]
-		]
+		] 
   } /. old->oldEquals /. UnSym->new
 ]
 
