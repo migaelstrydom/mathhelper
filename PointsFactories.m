@@ -22,7 +22,8 @@ ChebyshevGrid[xSmall_, xLarge_, n_Integer/;n>1] :=
 	xSmall+1/2 (xLarge-xSmall) (1-Cos[\[Pi] Range[0,n-1]/(n-1)]);
 
 Options[CollocationPointsFactory] = {Precision -> MachinePrecision};
-CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
+CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, 
+		numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
 
 	Clear[collPoints];
 
@@ -54,12 +55,28 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, number
 			z]
 		]/@collPoints[label]
 	);
-	collPoints[plot][y_?ListQ,plotOptions___] := 
-		Show[
-			{ListLinePlot[Thread[({#1,#2}&)[collPoints[label],y]],InterpolationOrder->collPoints[number]-1, plotOptions],
-				ListPlot[Thread[({#1,#2}&)[collPoints[label],y]],PlotStyle->PointSize[0.02]]},
-			plotOptions
+	collPoints[plot][y_?ListQ, plotOptions___] := Module[{pointPairs, showList, sanitisedPlotOptions},
+		pointPairs = Thread[({#1,#2}&)[collPoints[label], y]];
+		sanitisedPlotOptions = Apply[Sequence,
+			DeleteCases[List[plotOptions], (ShowPoints -> _) | (ShowLine -> _)]
 		];
+		showList = {};
+
+		If[(ShowPoints /. List[plotOptions]) =!= False, 
+			AppendTo[showList, ListPlot[pointPairs, PlotStyle -> PointSize[0.02],
+				sanitisedPlotOptions
+			]]
+		];
+		If[(ShowLine /. List[plotOptions]) =!= False, 
+			AppendTo[showList, 
+				ListLinePlot[pointPairs, InterpolationOrder -> collPoints[number] - 1, 
+					sanitisedPlotOptions
+				]
+			]
+		];
+		
+		Show[showList, sanitisedPlotOptions]
+	];
 
 	collPoints[evaluate][ps_List,x_List] :=
 		With[{cp=collPoints[label],numPoints=collPoints[number]},
