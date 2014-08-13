@@ -130,9 +130,27 @@ EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberO
 
 	esPoints[interpolation][ps_?ListQ] := Interpolation[Thread[({#1,#2}&)[esPoints[label],ps]]];
 
-	esPoints[plot][ps_?ListQ,plotOptions___] := ListLinePlot[Thread[({#1,#2}&)[esPoints[label],ps]],AxesOrigin->{0,0},plotOptions];
-	esPoints[plot][field_?(MemberQ[tfields,#]&)] := esPoints[plot][esPoints[field]];
+	esPoints[plot][ps_?ListQ, plotOptions___] := Module[{pointPairs, showList, sanitisedPlotOptions},
 
+		pointPairs = Thread[({#1, #2}&)[esPoints[label], ps]];
+		sanitisedPlotOptions = Apply[Sequence,
+			DeleteCases[List[plotOptions], (ShowPoints -> _) | (ShowLine -> _)]
+		];
+		showList = {};
+
+		If[(ShowPoints /. List[plotOptions]) === True, 
+			AppendTo[showList, ListPlot[pointPairs, PlotStyle -> PointSize[0.02],
+				sanitisedPlotOptions
+			]]
+		];
+		If[(ShowLine /. List[plotOptions]) =!= False, 
+			AppendTo[showList, 
+				ListLinePlot[pointPairs, sanitisedPlotOptions]
+			]
+		];
+		
+		Show[showList, sanitisedPlotOptions]
+	];
 	esPoints[diff][ps_?ListQ, n_Integer /; n > 0] :=
 		NDSolve`FiniteDifferenceDerivative[n, esPoints[label], ps, 
 			PeriodicInterpolation -> False, "DifferenceOrder" -> 8, PeriodicInterpolation -> {False}
