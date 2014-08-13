@@ -36,10 +36,11 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, number
 	collPoints[interpolation][ps_?ListQ] :=
 		Interpolation[Thread[({#1,#2}&)[collPoints[label],ps]],InterpolationOrder->collPoints[number]-1];
 
-	collPoints[diff][y_?ListQ,n_Integer/;n>0] :=
-		NDSolve`FiniteDifferenceDerivative[n,collPoints[label],y,
-			PeriodicInterpolation->False,"DifferenceOrder"->"Pseudospectral"];
-	collPoints[diff][y_?ListQ] := collPoints[diff][y,1];
+	collPoints[diff][y_?ListQ, n_Integer /; n > 0] :=
+		NDSolve`FiniteDifferenceDerivative[n, collPoints[label], y,
+			PeriodicInterpolation->False, "DifferenceOrder"->"Pseudospectral"];
+	collPoints[diff][y_?ListQ] := collPoints[diff][y, 1];
+	collPoints[diff][y_?ListQ, 0] := y;
 
 	collPoints[diffMatrix][n_Integer /; n >= 0] :=
 		NDSolve`FiniteDifferenceDerivative[{n}, {collPoints[label]},
@@ -70,11 +71,12 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, number
 			Interpolation[{cp[[#]],collPoints[field][[#]]}&/@Range[numPoints],InterpolationOrder->numPoints-1]/@x
 		];
 
-	collPoints[substitute][fieldList_] = {
-		Derivative[dz__][field_][p__]/;MemberQ[fieldList,field]:>
-			collPoints[diff][collPoints[field],CountDerivatives[Derivative[dz][field][p],label]],
-		field_[p__]/;MemberQ[fieldList,field]:>collPoints[field],
-		label->collPoints[label]
+	(* pointsStructure contains the lists of points corresponding to the fields in fieldList. *)
+	collPoints[substitute][fieldList_, pointsStructure_] = {
+		Derivative[dz__][field_][p__] /; MemberQ[fieldList, field] :>
+			collPoints[diff][pointsStructure[field], CountDerivatives[Derivative[dz][field][p],label]],
+		field_[p__] /; MemberQ[fieldList,field] :> pointsStructure[field],
+		label -> collPoints[label]
 	};
 
 	collPoints[substituteAnalytic][fieldList_List] := {
@@ -114,10 +116,13 @@ EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberO
 	esPoints[plot][ps_?ListQ,plotOptions___] := ListLinePlot[Thread[({#1,#2}&)[esPoints[label],ps]],AxesOrigin->{0,0},plotOptions];
 	esPoints[plot][field_?(MemberQ[tfields,#]&)] := esPoints[plot][esPoints[field]];
 
-	(*esPoints[diff][ps_?ListQ,n_Integer/;n>0]:=(Head[D[Interpolation[Thread[({#1,#2}&)[esPoints[label],ps]],InterpolationOrder\[Rule]esPoints[number]-1][z],z]]/@esPoints[label]);*)
-	esPoints[diff][ps_?ListQ,n_Integer/;n>0]:=NDSolve`FiniteDifferenceDerivative[n,esPoints[label],ps,PeriodicInterpolation->False,"DifferenceOrder"->8,PeriodicInterpolation->{False}];
-	esPoints[diff][field_?(MemberQ[tfields,#]&),n_Integer/;n>0]:=esPoints[diff][esPoints[field],n];
-	esPoints[diff][ps_] := esPoints[diff][ps, 1];
+	esPoints[diff][ps_?ListQ, n_Integer /; n > 0] :=
+		NDSolve`FiniteDifferenceDerivative[n, esPoints[label], ps, 
+			PeriodicInterpolation -> False, "DifferenceOrder" -> 8, PeriodicInterpolation -> {False}
+		];
+	esPoints[diff][ps_?ListQ] := esPoints[diff][ps, 1];
+	esPoints[diff][ps_?ListQ, 0] := ps;
+
 	esPoints[diffMatrix][n_Integer /; n >= 0] :=
 		NDSolve`FiniteDifferenceDerivative[{n}, {esPoints[label]}, 
 			"DifferenceOrder" -> 8,
@@ -129,9 +134,11 @@ EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberO
 
 	esPoints[evaluate][field_Symbol,x_List] :=Map[esPoints[interpolation][esPoints[field]],x];
 
-	esPoints[substitute][fieldList_] = {
-		Derivative[dz__][field_][p__]/;MemberQ[fieldList,field]:>esPoints[diff][esPoints[field],CountDerivatives[Derivative[dz][field][p],label]],
-		field_[p__]/;MemberQ[fieldList,field]:>esPoints[field],
+	(* pointsStructure contains the lists of points corresponding to the fields in fieldList. *)
+	esPoints[substitute][fieldList_, pointsStructure_] = {
+		Derivative[dz__][field_][p__] /; MemberQ[fieldList,field ]:>
+			esPoints[diff][pointsStructure[field], CountDerivatives[Derivative[dz][field][p], label]],
+		field_[p__] /; MemberQ[fieldList, field] :> pointsStructure[field],
 		label->esPoints[label]
 	};
 
