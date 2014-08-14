@@ -28,6 +28,7 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 	Clear[collPoints];
 
 	collPoints[number] = numberOfPoints;
+	collPoints[precision] = OptionValue[Precision];
 	collPoints[label] = ChebyshevGrid[SetPrecision[start, OptionValue[Precision]], 
 									 SetPrecision[end, OptionValue[Precision]],
 									 collPoints[number]];
@@ -44,9 +45,15 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 	collPoints[diff][y_?ListQ, 0] := y;
 
 	collPoints[diffMatrix][n_Integer /; n >= 0] :=
-		NDSolve`FiniteDifferenceDerivative[{n}, {collPoints[label]},
+		With[{id = IdentityMatrix[collPoints[number]]},
+			Transpose[Table[collPoints[diff][id[[i]], n], {i, collPoints[number]}]]
+		];
+		(* This official method has a bug. It returns the wrong differentiation matrix 
+		   when Precision \[NotEqual] MachinePrecision. *)
+		(*NDSolve`FiniteDifferenceDerivative[{n}, {collPoints[label]},
 			"DifferenceOrder"->"Pseudospectral",
-			PeriodicInterpolation->{False}] @ "DifferentiationMatrix";
+			PeriodicInterpolation->{False}]["DifferentiationMatrix"];
+		*)
 
 	collPoints[integrate][ps_?ListQ] := (
 		Head[Integrate[
@@ -122,6 +129,7 @@ Options[EvenlySpacedPointsFactory] = {Precision -> MachinePrecision};
 EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
 	Clear[esPoints];
 	esPoints[number] = numberOfPoints;
+	esPoints[precision] = OptionValue[Precision];
 	esPoints[label] = Linspace[SetPrecision[start, OptionValue[Precision]], 
 							  SetPrecision[end, OptionValue[Precision]], esPoints[number]];
 	esPoints[zeroes] = SetPrecision[ConstantArray[0,esPoints[number]], OptionValue[Precision]];
@@ -199,6 +207,7 @@ PointsPatchesFactory[points_Symbol, pointsA_Symbol, pointsB_Symbol, label_Symbol
 
 	points[label] = Join[pointsA[label][[;;-2]],pointsB[label]];
 	points[number]= Length[points[label]];
+	points[precision] = OptionValue[Precision];
 	points[zeroes] = SetPrecision[ConstantArray[0, points[number]], OptionValue[Precision]];
 	points[ones] = SetPrecision[ConstantArray[1., points[number]], OptionValue[Precision]];
 
@@ -227,12 +236,27 @@ PointsPatchesFactory[points_Symbol, pointsA_Symbol, pointsB_Symbol, label_Symbol
 			]
 		];
 
-	points[plot][y_?ListQ,plotOptions___] := 
-		Show[
-			{ListLinePlot[Thread[({#1,#2}&)[points[label],y]], plotOptions],
-				ListPlot[Thread[({#1,#2}&)[points[label],y]],PlotStyle->PointSize[0.02]]},
-			plotOptions
+	points[plot][y_?ListQ, plotOptions___] := Module[{pointPairs, showList, sanitisedPlotOptions},
+
+		pointPairs = Thread[({#1, #2}&)[points[label], y]];
+		sanitisedPlotOptions = Apply[Sequence,
+			DeleteCases[List[plotOptions], (ShowPoints -> _) | (ShowLine -> _)]
 		];
+		showList = {};
+
+		If[(ShowPoints /. List[plotOptions]) =!= False, 
+			AppendTo[showList, ListPlot[pointPairs, PlotStyle -> PointSize[0.02],
+				sanitisedPlotOptions
+			]]
+		];
+		If[(ShowLine /. List[plotOptions]) =!= False, 
+			AppendTo[showList, 
+				ListLinePlot[pointPairs, sanitisedPlotOptions]
+			]
+		];
+		
+		Show[showList, sanitisedPlotOptions]
+	];
 
 	points[evaluate][ps_List,x_List] := (
 		Join[
