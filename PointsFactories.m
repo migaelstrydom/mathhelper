@@ -16,7 +16,11 @@ Copyright 2013 Migael Strydom
    limitations under the License.
 *)
 
-Clear[CollocationPointsFactory, EvenlySpacedPointsFactory, PointsPatchesFactory, CollocationPoints2DFactory, EvenlySpacedPoints2DFactory];
+Clear[CollocationPointsFactory, 
+	EvenlySpacedPointsFactory, 
+	PointsPatchesFactory, 
+	CollocationPoints2DFactory, 
+	EvenlySpacedPoints2DFactory];
 
 ChebyshevGrid[xSmall_, xLarge_, n_Integer/;n>1] := 
 	xSmall+1/2 (xLarge-xSmall) (1-Cos[\[Pi] Range[0,n-1]/(n-1)]);
@@ -32,11 +36,13 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 	collPoints[label] = ChebyshevGrid[SetPrecision[start, OptionValue[Precision]], 
 									 SetPrecision[end, OptionValue[Precision]],
 									 collPoints[number]];
-	collPoints[zeroes] = SetPrecision[ConstantArray[0, collPoints[number]],OptionValue[Precision]];
-	collPoints[ones] = SetPrecision[ConstantArray[1, collPoints[number]],OptionValue[Precision]];
+	collPoints[zeroes] = SetPrecision[ConstantArray[0, collPoints[number]], OptionValue[Precision]];
+	collPoints[ones] = SetPrecision[ConstantArray[1, collPoints[number]], OptionValue[Precision]];
 
 	collPoints[interpolation][ps_?ListQ] :=
-		Interpolation[Thread[({#1,#2}&)[collPoints[label],ps]],InterpolationOrder->collPoints[number]-1];
+		Interpolation[Thread[({#1,#2}&)[collPoints[label], ps]], 
+			InterpolationOrder -> collPoints[number]-1
+		];
 
 	collPoints[diff][y_?ListQ, n_Integer /; n > 0] :=
 		NDSolve`FiniteDifferenceDerivative[n, collPoints[label], y,
@@ -302,45 +308,82 @@ Plot[%[z],{z,0,2}]
 points[evaluate][Sin[5points[z]],Linspace[0,2.,5000]]//ListPlot
 *)
 
-CollocationPoints2DFactory[collPoints2D_, zPoints_List, vPoints_List, zLabel_, vLabel_] := (
+Options[CollocationPoints2DFactory] = {Precision -> MachinePrecision};
+CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List, 
+		zLabel_Symbol, vLabel_Symbol,
+		OptionsPattern[]] := (
 
 	Clear[collPoints2D];
 
-	collPoints2D[zLabel] = zPoints;
-	collPoints2D[vLabel] = vPoints;
+	collPoints2D[precision] = OptionValue[Precision];
 
-	collPoints2D[number][zLabel]=Length[collPoints2D[zLabel]];
-	collPoints2D[number][vLabel]=Length[collPoints2D[vLabel]];
+	collPoints2D[zLabel] = SetPrecision[zPoints, OptionValue[Precision]];
+	collPoints2D[vLabel] = SetPrecision[vPoints, OptionValue[Precision]];
 
-	collPoints2D[diffMatrix][dz_,dy_] := collPoints2D[diffMatrix][dz,dy] =
+	collPoints2D[number][zLabel] = Length[collPoints2D[zLabel]];
+	collPoints2D[number][vLabel] = Length[collPoints2D[vLabel]];
+
+	collPoints2D[grid][zLabel] = Outer[
+		Times, collPoints2D[zLabel], ConstantArray[1, collPoints2D[number][vLabel]]
+	];
+
+	collPoints2D[grid][vLabel] = Outer[
+		Times, ConstantArray[1, collPoints2D[number][zLabel]], collPoints2D[vLabel]
+	];
+
+	collPoints2D[zeroes] = SetPrecision[
+		ConstantArray[0, {collPoints2D[number][zLabel], collPoints2D[number][vLabel]}], 
+		OptionValue[Precision]
+	];
+	collPoints2D[ones] = SetPrecision[
+		ConstantArray[1, {collPoints2D[number][zLabel], collPoints2D[number][vLabel]}], 
+		OptionValue[Precision]
+	];
+
+	collPoints2D[diffMatrix][dz_, dy_] := collPoints2D[diffMatrix][dz, dy] =
 		Normal[
-			NDSolve`FiniteDifferenceDerivative[{dz,dy},{collPoints2D[zLabel],collPoints2D[vLabel]},PeriodicInterpolation->False,"DifferenceOrder"->"Pseudospectral"]["DifferentiationMatrix"]
+			NDSolve`FiniteDifferenceDerivative[{dz, dy},
+				{collPoints2D[zLabel], collPoints2D[vLabel]},
+				PeriodicInterpolation -> False,
+				"DifferenceOrder" -> "Pseudospectral"
+			]["DifferentiationMatrix"]
 		];
-	collPoints2D[diff][dz_,dy_][fieldPoints_] :=
+
+	collPoints2D[diff][dz_, dy_][fieldPoints_] :=
 		NDSolve`FiniteDifferenceDerivative[
-			{dz,dy},{collPoints2D[zLabel],collPoints2D[vLabel]},
-			PeriodicInterpolation->False,"DifferenceOrder"->"Pseudospectral"][fieldPoints];
+			{dz, dy}, {collPoints2D[zLabel], collPoints2D[vLabel]},
+			PeriodicInterpolation -> False, "DifferenceOrder" -> "Pseudospectral"
+		][fieldPoints];
 
-	collPoints2D[analytic][field_]:=Outer[Function[{i,j},field[i,j]],Range[Length[collPoints2D[zLabel]]],Range[Length[collPoints2D[vLabel]]]];
+	collPoints2D[analytic][field_] := Outer[
+		Function[{i, j}, field[i, j]], 
+		Range[Length[collPoints2D[zLabel]]], 
+		Range[Length[collPoints2D[vLabel]]]
+	];
 
-	collPoints2D[plot][data_,PlotOptions___] := 
-		ListPlot3D[
-			Flatten[Table[{collPoints2D[zLabel][[i]],collPoints2D[vLabel][[j]],data[[i,j]]},
-				{i,collPoints2D[number][zLabel]},{j,collPoints2D[number][vLabel]}],
+	collPoints2D[plot][data_, PlotOptions___] := ListPlot3D[
+			Flatten[Table[{collPoints2D[zLabel][[i]], collPoints2D[vLabel][[j]], data[[i, j]]},
+				{i, collPoints2D[number][zLabel]}, {j, collPoints2D[number][vLabel]}],
 			1],
-		PlotOptions];
+			PlotOptions
+		];
 
 	collPoints2D[substituteAnalytic][fields_]:=
 		Join[
 			Map[
-				(Derivative[dz_,dv_][#][z,v]:>Partition[collPoints2D[diffMatrix][dz,dv].Flatten[collPoints2D[analytic][#]],collPoints2D[number][vLabel]])&,
+				(Derivative[dz_, dv_][#][zLabel, vLabel] :> 
+					Partition[
+						collPoints2D[diffMatrix][dz, dv].Flatten[collPoints2D[analytic][#]], 
+						collPoints2D[number][vLabel]
+					])&,
 				fields
 			],
 			Map[
-				#[z,v]->collPoints2D[analytic][#]&,
+				#[zLabel, vLabel] -> collPoints2D[analytic][#]&,
 				fields
 			],
-			{zLabel->collPoints2D[zLabel]}
+			{zLabel -> collPoints2D[grid][zLabel]},
+			{vLabel -> collPoints2D[grid][vLabel]}
 		];
 
 );
@@ -376,7 +419,7 @@ EvenlySpacedPoints2DFactory[esPoints2D_, zPoints_List, vPoints_List, zLabel_, vL
 	esPoints2D[substituteAnalytic][fields_]:=
 		Join[
 			Map[
-				(Derivative[dz_,dv_][#][z,v]:>Partition[esPoints2D[diffMatrix][dz,dv].Flatten[esPoints2D[analytic][#]],esPoints2D[number][vLabel]])&,
+				(Derivative[dz_,dv_][#][z, v]:>Partition[esPoints2D[diffMatrix][dz,dv].Flatten[esPoints2D[analytic][#]],esPoints2D[number][vLabel]])&,
 				fields
 			],
 			Map[
