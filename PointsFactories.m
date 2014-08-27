@@ -16,7 +16,9 @@ Copyright 2013 Migael Strydom
    limitations under the License.
 *)
 
-Clear[CollocationPointsFactory, 
+Clear[ChebyshevGrid,
+	DifferentiateCollocationPoints,
+	CollocationPointsFactory, 
 	EvenlySpacedPointsFactory, 
 	PointsPatchesFactory, 
 	CollocationPoints2DFactory, 
@@ -24,6 +26,27 @@ Clear[CollocationPointsFactory,
 
 ChebyshevGrid[xSmall_, xLarge_, n_Integer/;n>1] := 
 	xSmall+1/2 (xLarge-xSmall) (1-Cos[\[Pi] Range[0,n-1]/(n-1)]);
+
+DifferentiateCollocationPoints[grid_List, y_List, n_Integer /; n > 0] :=
+	NDSolve`FiniteDifferenceDerivative[
+		n, grid, y,
+		PeriodicInterpolation->False, "DifferenceOrder"->"Pseudospectral"
+	];
+
+DifferentiateCollocationPoints[grid_List, y_List, 0] := y;
+
+DiffMatrixCollocationPoints[grid_List, n_Integer /; n > 0] :=
+	With[{id = IdentityMatrix[Length[grid]]},
+		Transpose[Table[DifferentiateCollocationPoints[grid, id[[i]], n], {i, Length[grid]}]]
+	];
+	(* This official method has a bug. It returns the wrong differentiation matrix 
+	   when Precision \[NotEqual] MachinePrecision. *)
+	(*NDSolve`FiniteDifferenceDerivative[{n}, {grid},
+		"DifferenceOrder"->"Pseudospectral",
+		PeriodicInterpolation->{False}]["DifferentiationMatrix"];
+	*)
+
+DiffMatrixCollocationPoints[grid_List, 0] := IdentityMatrix[Length[grid]];
 
 Options[CollocationPointsFactory] = {Precision -> MachinePrecision};
 CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, 
@@ -44,22 +67,13 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 			InterpolationOrder -> collPoints[number]-1
 		];
 
-	collPoints[diff][y_?ListQ, n_Integer /; n > 0] :=
-		NDSolve`FiniteDifferenceDerivative[n, collPoints[label], y,
-			PeriodicInterpolation->False, "DifferenceOrder"->"Pseudospectral"];
-	collPoints[diff][y_?ListQ] := collPoints[diff][y, 1];
-	collPoints[diff][y_?ListQ, 0] := y;
+	collPoints[diff][y_List, n_Integer /; n >= 0] := 
+		DifferentiateCollocationPoints[collPoints[label], y, n];
 
-	collPoints[diffMatrix][n_Integer /; n >= 0] :=
-		With[{id = IdentityMatrix[collPoints[number]]},
-			Transpose[Table[collPoints[diff][id[[i]], n], {i, collPoints[number]}]]
-		];
-		(* This official method has a bug. It returns the wrong differentiation matrix 
-		   when Precision \[NotEqual] MachinePrecision. *)
-		(*NDSolve`FiniteDifferenceDerivative[{n}, {collPoints[label]},
-			"DifferenceOrder"->"Pseudospectral",
-			PeriodicInterpolation->{False}]["DifferentiationMatrix"];
-		*)
+	collPoints[diff][y_List] := collPoints[diff][y, 1];
+
+	collPoints[diffMatrix][n_Integer /; n >= 0] := collPoints[diffMatrix][n] = 
+		DiffMatrixCollocationPoints[collPoints[label], n];
 
 	collPoints[integrate][ps_?ListQ] := (
 		Head[Integrate[
@@ -136,8 +150,9 @@ EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberO
 	Clear[esPoints];
 	esPoints[number] = numberOfPoints;
 	esPoints[precision] = OptionValue[Precision];
-	esPoints[label] = Linspace[SetPrecision[start, OptionValue[Precision]], 
-							  SetPrecision[end, OptionValue[Precision]], esPoints[number]];
+	esPoints[label] = Array[# &, esPoints[number], 
+		{SetPrecision[start, OptionValue[Precision]], SetPrecision[end, OptionValue[Precision]]}];
+
 	esPoints[zeroes] = SetPrecision[ConstantArray[0,esPoints[number]], OptionValue[Precision]];
 	esPoints[ones] = SetPrecision[ConstantArray[1,esPoints[number]], OptionValue[Precision]];
 	esPoints[spacing] = esPoints[label][[2]]-esPoints[label][[1]];
@@ -340,20 +355,30 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 		OptionValue[Precision]
 	];
 
-	collPoints2D[diffMatrix][dz_, dy_] := collPoints2D[diffMatrix][dz, dy] =
-		Normal[
+	collPoints2D[diffMatrix][dz_, dv_] := collPoints2D[diffMatrix][dz, dv] =
+		KroneckerProduct[
+			DiffMatrixCollocationPoints[collPoints2D[zLabel], dz],
+			DiffMatrixCollocationPoints[collPoints2D[vLabel], dv]
+		];
+	(* This code does not work due to a mathematica bug when Precision \[NotEqual] MachinePrecision. *)
+		(*Normal[
 			NDSolve`FiniteDifferenceDerivative[{dz, dy},
 				{collPoints2D[zLabel], collPoints2D[vLabel]},
 				PeriodicInterpolation -> False,
 				"DifferenceOrder" -> "Pseudospectral"
 			]["DifferentiationMatrix"]
-		];
+		];*)
 
-	collPoints2D[diff][dz_, dy_][fieldPoints_] :=
-		NDSolve`FiniteDifferenceDerivative[
+	collPoints2D[diff][dz_, dv_][fieldPoints_] := Partition[
+			collPoints2D[diffMatrix][dz, dv].Flatten[fieldPoints], 
+			collPoints2D[number][vLabel]
+		];
+	(* Does not work due to a mathematica bug when Precision \[NotEqual] MachinePrecision. *)
+(*		NDSolve`FiniteDifferenceDerivative[
 			{dz, dy}, {collPoints2D[zLabel], collPoints2D[vLabel]},
 			PeriodicInterpolation -> False, "DifferenceOrder" -> "Pseudospectral"
 		][fieldPoints];
+*)
 
 	collPoints2D[analytic][field_] := Outer[
 		Function[{i, j}, field[i, j]], 
@@ -365,10 +390,34 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 			Flatten[Table[{collPoints2D[zLabel][[i]], collPoints2D[vLabel][[j]], data[[i, j]]},
 				{i, collPoints2D[number][zLabel]}, {j, collPoints2D[number][vLabel]}],
 			1],
+			AxesLabel -> {zLabel, vLabel},
 			PlotOptions
 		];
 
-	collPoints2D[substituteAnalytic][fields_]:=
+	(* pointsStructure contains the lists of points corresponding to the fields in fieldList. *)
+	collPoints2D[substitute][fields_List, pointsStructure_Symbol] := 
+		Join[
+			Map[
+				(Derivative[dz_, dv_][#][zLabel, vLabel] :> 
+					collPoints2D[diff][dz, dv][pointsStructure[#]])&,
+				fields
+			],
+			Map[
+				#[zLabel, vLabel] -> pointsStructure[#]&,
+				fields
+			],
+			{zLabel -> collPoints2D[grid][zLabel]},
+			{vLabel -> collPoints2D[grid][vLabel]}
+		];
+
+(*	{
+		Derivative[dz__][field_][p__] /; MemberQ[fieldList, field] :>
+			collPoints[diff][pointsStructure[field], CountDerivatives[Derivative[dz][field][p],label]],
+		field_[p__] /; MemberQ[fieldList,field] :> pointsStructure[field],
+		label -> collPoints[label]
+	};*)
+
+	collPoints2D[substituteAnalytic][fields_List]:=
 		Join[
 			Map[
 				(Derivative[dz_, dv_][#][zLabel, vLabel] :> 
@@ -388,6 +437,8 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 
 );
 
+
+(* Out of date. Not as new as CollocationPoints2DFactory. *)
 EvenlySpacedPoints2DFactory[esPoints2D_, zPoints_List, vPoints_List, zLabel_, vLabel_] := (
 
 	Clear[esPoints2D];
