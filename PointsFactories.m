@@ -355,7 +355,8 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 		OptionValue[Precision]
 	];
 
-	collPoints2D[diffMatrix][dz_, dv_] := collPoints2D[diffMatrix][dz, dv] =
+	collPoints2D[diffMatrix][dz_Integer/;(dz>=0), dv_Integer/;(dv>=0)] := 
+		collPoints2D[diffMatrix][dz, dv] =
 		KroneckerProduct[
 			DiffMatrixCollocationPoints[collPoints2D[zLabel], dz],
 			DiffMatrixCollocationPoints[collPoints2D[vLabel], dv]
@@ -369,7 +370,7 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 			]["DifferentiationMatrix"]
 		];*)
 
-	collPoints2D[diff][dz_, dv_][fieldPoints_] := Partition[
+	collPoints2D[diff][dz_Integer/;(dz>=0), dv_Integer/;(dv>=0)][fieldPoints_] := Partition[
 			collPoints2D[diffMatrix][dz, dv].Flatten[fieldPoints], 
 			collPoints2D[number][vLabel]
 		];
@@ -422,7 +423,7 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 			Map[
 				(Derivative[dz_, dv_][#][zLabel, vLabel] :> 
 					Partition[
-						collPoints2D[diffMatrix][dz, dv].Flatten[collPoints2D[analytic][#]], 
+						Evaluate[collPoints2D[diffMatrix][dz, dv].Flatten[collPoints2D[analytic][#]]], 
 						collPoints2D[number][vLabel]
 					])&,
 				fields
@@ -434,7 +435,6 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 			{zLabel -> collPoints2D[grid][zLabel]},
 			{vLabel -> collPoints2D[grid][vLabel]}
 		];
-
 );
 
 
