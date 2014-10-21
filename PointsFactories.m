@@ -16,6 +16,7 @@ Copyright 2013 Migael Strydom
    limitations under the License.
 *)
 
+(* The following symbols are defined in this package: *)
 Clear[ChebyshevGrid,
 	DifferentiateCollocationPoints,
 	CollocationPointsFactory, 
@@ -24,17 +25,25 @@ Clear[ChebyshevGrid,
 	CollocationPoints2DFactory, 
 	EvenlySpacedPoints2DFactory];
 
-ChebyshevGrid[xSmall_, xLarge_, n_Integer/;n>1] := 
-	xSmall+1/2 (xLarge-xSmall) (1-Cos[\[Pi] Range[0,n-1]/(n-1)]);
+(* Produce a Chebyshev grid starting at xSmall, ending at xLarge and with n points. *)
+ChebyshevGrid[xSmall_?NumberQ, xLarge_?NumberQ, n_Integer/;n>1] := 
+	xSmall + 1/2 (xLarge-xSmall) (1 - Cos[\[Pi] Range[0, n-1] / (n-1)]);
 
+(* Use NDSolve`FiniteDifferenceDerivative to differentiate "y" on the Chebyshev grid 
+	"grid" with "n" points.
+*)
 DifferentiateCollocationPoints[grid_List, y_List, n_Integer /; n > 0] :=
 	NDSolve`FiniteDifferenceDerivative[
 		n, grid, y,
 		PeriodicInterpolation->False, "DifferenceOrder"->"Pseudospectral"
 	];
-
+(* Define the zeroth order derivative of "y" on Chebyshev grid "grid". This is just the
+   identity operator.
+*)
 DifferentiateCollocationPoints[grid_List, y_List, 0] := y;
 
+(* Return the differentiation operator as a matrix, which can act on a vector "y" of
+   points on a Chebyshev grid. *)
 DiffMatrixCollocationPoints[grid_List, n_Integer /; n > 0] :=
 	With[{id = IdentityMatrix[Length[grid]]},
 		Transpose[Table[DifferentiateCollocationPoints[grid, id[[i]], n], {i, Length[grid]}]]
@@ -45,10 +54,50 @@ DiffMatrixCollocationPoints[grid_List, n_Integer /; n > 0] :=
 		"DifferenceOrder"->"Pseudospectral",
 		PeriodicInterpolation->{False}]["DifferentiationMatrix"];
 	*)
-
+(* Special case: returns the identity matrix for zeroth order derivatives. *)
 DiffMatrixCollocationPoints[grid_List, 0] := IdentityMatrix[Length[grid]];
 
+(* By default we initialise the points with MachinePrecision. *)
 Options[CollocationPointsFactory] = {Precision -> MachinePrecision};
+
+(* Create a structure containing Chebyshev points and functions that can operate on those points.
+
+	collPoints: A symbol that will be populated with the structure's properties and methods.
+	start: The smallest point in the Chebyshev grid.
+	end: The biggest point in the Chebyshev grid.
+	numberOfPoints: The number of points in the Chebyshev grid.
+	label: A symbol specifying the coordinate name, such as "x".
+	Options: 
+		Precision: A precision setting given to Mathematica. The default value is 
+			"MachinePrecision".
+
+	The structure collPoints will be populated with the following properties and methods.
+	Properties:
+	collPoints[number]: The number of points on the Chebyshev grid.
+	collPoints[precision]: The precision of the points.
+	collPoints[label]: The list of Chebyshev points.
+	collPoints[zeroes]: A list of zeroes with length collPoints[number].
+	collPoints[ones]: A list of ones with length collPoints[number].
+	Methods:
+	collPoints[interpolation][ps_]: Treats ps as a list f(x_i) of function values of f at
+		Chebyshev points x_i. Returns an interpolating function f made out of those points.
+	collPoints[diff][y_, n_]: Treats y as a function y(x_i), with x_i the Chebyshev points. Returns
+		the points of the nth derivative d^(n) y / dx.
+	collPoints[diffMatrix][n_]: Returns the nth-order differentiation matrix for the Chebyshev 
+		points.	
+	collPoints[integrate][y_]: Treats y as a function y(x_i), with x_i the Chebyshev points. 
+		Returns the points of the integral \int y dx. WARNING: This does not use pseudospectral 
+		methods.
+	collPoints[plot][y_, plotOptions_]: Plots the points y(x_i). PlotOptions:
+		ShowPoints: True/False, whether to plot the individual points.
+		ShowLine: True/False, whether to draw an interpolating line on the plot.
+	collPoints[evaluate][ps_, x_]: Turns the points list ps into an interpolating function and
+		evaluates it at the points in the list x.
+	collPoints[substitute][fieldList, pointsStructure]: Returns a list of replacement rules that
+		can be used to substitute into an expression involving the fields in fieldList and their
+		derivatives.
+*)
+
 CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, 
 		numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
 
@@ -116,7 +165,7 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 		];
 
 	(* pointsStructure contains the lists of points corresponding to the fields in fieldList. *)
-	collPoints[substitute][fieldList_, pointsStructure_] = {
+	collPoints[substitute][fieldList_List, pointsStructure_Symbol] = {
 		Derivative[dz__][field_][p__] /; MemberQ[fieldList, field] :>
 			collPoints[diff][pointsStructure[field], CountDerivatives[Derivative[dz][field][p],label]],
 		field_[p__] /; MemberQ[fieldList,field] :> pointsStructure[field],
