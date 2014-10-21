@@ -49,7 +49,7 @@ DiffMatrixCollocationPoints[grid_List, n_Integer /; n > 0] :=
 		Transpose[Table[DifferentiateCollocationPoints[grid, id[[i]], n], {i, Length[grid]}]]
 	];
 	(* This official method has a bug. It returns the wrong differentiation matrix 
-	   when Precision \[NotEqual] MachinePrecision. *)
+	   when Precision != MachinePrecision. *)
 	(*NDSolve`FiniteDifferenceDerivative[{n}, {grid},
 		"DifferenceOrder"->"Pseudospectral",
 		PeriodicInterpolation->{False}]["DifferentiationMatrix"];
@@ -88,14 +88,20 @@ Options[CollocationPointsFactory] = {Precision -> MachinePrecision};
 	collPoints[integrate][y_]: Treats y as a function y(x_i), with x_i the Chebyshev points. 
 		Returns the points of the integral \int y dx. WARNING: This does not use pseudospectral 
 		methods.
-	collPoints[plot][y_, plotOptions_]: Plots the points y(x_i). PlotOptions:
+	collPoints[plot][y_, plotOptions_]: Plots the points y (x_i). PlotOptions:
 		ShowPoints: True/False, whether to plot the individual points.
 		ShowLine: True/False, whether to draw an interpolating line on the plot.
 	collPoints[evaluate][ps_, x_]: Turns the points list ps into an interpolating function and
 		evaluates it at the points in the list x.
 	collPoints[substitute][fieldList, pointsStructure]: Returns a list of replacement rules that
 		can be used to substitute into an expression involving the fields in fieldList and their
-		derivatives.
+		derivatives. pointsStructure contains the numerical values of the fields in fieldList
+		that will be substituted in.
+	collPoints[substituteAnalytic][fieldList]: Returns a list of replacement rules 
+		that can be used to substitute into an expression involving the fields in fieldList and 
+		their derivatives. Each field f in fieldList is replaced by a list 
+		{f[1], f[2], ..., f[collPoints[number]]}.
+	collPoints[fieldTable][f_]: Returns {f[1], f[2], ..., f[collPoints[number]]}.
 *)
 
 CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ, 
@@ -154,12 +160,12 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 		Show[showList, sanitisedPlotOptions]
 	];
 
-	collPoints[evaluate][ps_List,x_List] :=
+	collPoints[evaluate][ps_List, x_List] :=
 		With[{cp=collPoints[label],numPoints=collPoints[number]},
 			Interpolation[{cp[[#]],ps[[#]]}&/@Range[numPoints],InterpolationOrder->numPoints-1]/@x
 		];
 
-	collPoints[evaluate][field_Symbol,x_List] :=
+	collPoints[evaluate][field_Symbol, x_List] :=
 		With[{cp=collPoints[label],numPoints=collPoints[number]},
 			Interpolation[{cp[[#]],collPoints[field][[#]]}&/@Range[numPoints],InterpolationOrder->numPoints-1]/@x
 		];
@@ -178,22 +184,20 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 				collPoints[diffMatrix][CountDerivatives[Derivative[dz][field][p],label]],
 				Table[field[\[FormalI]], {\[FormalI], collPoints[number]}]
 			],
-		field_[p__] /; MemberQ[fieldList,field] :> Table[field[\[FormalI]],{\[FormalI], collPoints[number]}],
+		field_[p__] /; MemberQ[fieldList, field] :> Table[field[\[FormalI]],{\[FormalI], collPoints[number]}],
 		label->collPoints[label]
 	};
 
-	collPoints[fieldTable][field_] := Table[field[\[FormalI]], {\[FormalI], collPoints[number]}];
+	collPoints[fieldTable][field_Symbol] := Table[field[\[FormalI]], {\[FormalI], collPoints[number]}];
 
-	(*
-	ResizeCollGrid[oldPoints_?ListQ,newSize_?IntegerQ]:=Module[{oldCollPoints,newCollPoints,interpolatingFunction},
-	oldCollPoints=N[ChebyshevGrid[collPoints[\[Epsilon]],1-collPoints[\[Epsilon]],Length[oldPoints]]];
-	newCollPoints=N[ChebyshevGrid[collPoints[\[Epsilon]],1-collPoints[\[Epsilon]],newSize]];
-	interpolatingFunction=Interpolation[({oldCollPoints[[#]],oldPoints[[#]]}&/@Range[Length[oldCollPoints]]),InterpolationOrder\[Rule]Length[oldCollPoints]-1];
-	interpolatingFunction/@newCollPoints
-	];
-	*)
+	(* TODO: Implement a function to resize a grid. *)
 );
 
+(*
+  This creates a structure that has exactly the same interface as when initialised
+  with CollocationPointsFactory, so see the comments there. The only difference is that 
+  the grid will consist of evenly spaced points.
+*)
 Options[EvenlySpacedPointsFactory] = {Precision -> MachinePrecision};
 EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberOfPoints_Integer, label_Symbol, OptionsPattern[]] := (
 	Clear[esPoints];
@@ -268,7 +272,12 @@ EvenlySpacedPointsFactory[esPoints_Symbol, start_?NumberQ, end_?NumberQ, numberO
 	esPoints[fieldTable][field_]:=Table[field[\[FormalI]],{\[FormalI],esPoints[number]}];
 );
 
-(* Domains must match up: pointsA[label][[-1]] \[Equal] pointsB[label][[1]] *)
+(* 
+  Creates a structure with exactly the same interface as the structure created by
+  CollocationPointsFactory. The difference is that it is created out of two points structure 
+  objects, which are matched up end to end. This means that their domains must match up: 
+  pointsA[label][[-1]] == pointsB[label][[1]].
+*)
 Options[PointsPatchesFactory] = {Precision -> MachinePrecision};
 PointsPatchesFactory[points_Symbol, pointsA_Symbol, pointsB_Symbol, label_Symbol, OptionsPattern[]] := (
 	Clear[points];
@@ -350,9 +359,9 @@ EvenlySpacedPointsFactory[pointsB,1., 2., 100, z]
 PointsPatchesFactory[points,pointsA,pointsB,z] 
 
 (* Diff *)
-points[plot][Sin[5points[z]],PlotRange\[Rule]All]
+points[plot][Sin[5points[z]],PlotRange->All]
 points[plot][points[diff][Sin[5points[z]]]]
-points[plot][points[diff][Sin[5points[z]]]-5Cos[5points[z]],PlotRange\[Rule]All]
+points[plot][points[diff][Sin[5points[z]]]-5Cos[5points[z]],PlotRange->All]
 
 points[diffMatrix][1]//MatrixPlot
 
@@ -362,9 +371,9 @@ points[diffMatrix][1].(points[z]^2)
 points[plot][%]
 
 (* integration *)
-points[plot][Sin[10points[z]],PlotRange\[Rule]All]
+points[plot][Sin[10points[z]],PlotRange->All]
 points[plot][points[integrate][Sin[10points[z]]]]
-points[plot][points[integrate][Sin[10points[z]]]+0.1Cos[10points[z]]-0.1,PlotRange\[Rule]All]
+points[plot][points[integrate][Sin[10points[z]]]+0.1Cos[10points[z]]-0.1,PlotRange->All]
 
 points[interpolation][Sin[5points[z]]]
 Plot[%[z],{z,0,2}]
@@ -372,6 +381,10 @@ Plot[%[z],{z,0,2}]
 points[evaluate][Sin[5points[z]],Linspace[0,2.,5000]]//ListPlot
 *)
 
+(*  
+	For 2D points objects.
+	TODO: Write documentation.
+*)
 Options[CollocationPoints2DFactory] = {Precision -> MachinePrecision};
 CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List, 
 		zLabel_Symbol, vLabel_Symbol,
@@ -410,7 +423,7 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 			DiffMatrixCollocationPoints[collPoints2D[zLabel], dz],
 			DiffMatrixCollocationPoints[collPoints2D[vLabel], dv]
 		];
-	(* This code does not work due to a mathematica bug when Precision \[NotEqual] MachinePrecision. *)
+	(* This code does not work due to a mathematica bug when Precision != MachinePrecision. *)
 		(*Normal[
 			NDSolve`FiniteDifferenceDerivative[{dz, dy},
 				{collPoints2D[zLabel], collPoints2D[vLabel]},
@@ -423,7 +436,7 @@ CollocationPoints2DFactory[collPoints2D_Symbol, zPoints_List, vPoints_List,
 			collPoints2D[diffMatrix][dz, dv].Flatten[fieldPoints], 
 			collPoints2D[number][vLabel]
 		];
-	(* Does not work due to a mathematica bug when Precision \[NotEqual] MachinePrecision. *)
+	(* Does not work due to a mathematica bug when Precision != MachinePrecision. *)
 (*		NDSolve`FiniteDifferenceDerivative[
 			{dz, dy}, {collPoints2D[zLabel], collPoints2D[vLabel]},
 			PeriodicInterpolation -> False, "DifferenceOrder" -> "Pseudospectral"
