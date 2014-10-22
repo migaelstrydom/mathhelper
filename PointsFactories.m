@@ -188,7 +188,7 @@ CollocationPointsFactory[collPoints_Symbol, start_?NumberQ, end_?NumberQ,
 		label->collPoints[label]
 	};
 
-	collPoints[fieldTable][field_Symbol] := Table[field[\[FormalI]], {\[FormalI], collPoints[number]}];
+	collPoints[fieldTable][field_] := Table[field[\[FormalI]], {\[FormalI], collPoints[number]}];
 
 	(* TODO: Implement a function to resize a grid. *)
 );
