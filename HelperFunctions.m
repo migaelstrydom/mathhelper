@@ -165,7 +165,14 @@ ChangeVariables[eq_, old_Symbol, new_Symbol,
 		Apply[D[Func[a, newEquals, b], ##] &, 
 			Thread[({#1, #2}&)[{a, old, b}, {dp}]]
 		] 
-  } /. old->oldEquals /. UnSym->new
+  } /. old->oldEquals /. UnSym->new /. {
+	(* After these substitutions, function derivatives contain newEquals /. old -> oldEquals. This does not 
+	   always simplify properly, so this final step says that any expression in the argument list of the
+	   derivative of a function should be replaced by new.*)
+    Derivative[dp__][Func_][a___, newExpr_, b___] /; (
+		MemberQ[validFunctions, Func] && Position[newExpr, new] =!= {}
+	) :> Derivative[dp][Func][a, new, b]
+  }
 ]
 
 (* Give this function a series (with head SeriesData) and it will return the leading coefficient. If the SeriesData is empty
